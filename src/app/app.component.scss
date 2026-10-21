@@ -33,11 +33,10 @@ code, pre, .format-badge, .step, .hint, .output-footer { font-family:'DM Mono',m
 .column-controls { display:grid; grid-template-columns:minmax(60px,1fr) 76px; gap:5px; min-width:0; }
 .column-controls input[type=text] { min-width:0; padding:8px 7px; font-size:10px; }
 .column-controls select { min-width:0; width:100%; border:1px solid var(--border); border-radius:5px; padding:7px 4px; background:#111412; color:var(--text); font:10px 'DM Mono',monospace; }
-.column-defaults { display:grid; grid-template-columns:44px minmax(70px,1fr) auto; align-items:center; gap:7px; margin:1px 0 8px 41px; }
+.column-defaults { display:grid; grid-template-columns:44px minmax(70px,1fr) 132px; align-items:center; gap:7px; margin:1px 0 8px 41px; }
 .default-value-label { color:var(--muted); font:9px 'DM Mono',monospace; }
 .column-defaults input[type=text] { min-width:0; padding:7px 8px; font-size:10px; }
-.function-toggle { display:flex; align-items:center; gap:5px; color:#aeb7b0; font-size:10px; white-space:nowrap; cursor:pointer; }
-.function-toggle input { accent-color:var(--accent); }
+.column-defaults select { width:100%; min-width:0; border:1px solid var(--border); border-radius:5px; padding:7px 5px; background:#111412; color:var(--text); font:9px 'DM Mono',monospace; }
 .column-disabled .column-original, .column-disabled .column-number { opacity:.45; } .column-disabled .column-controls { opacity:.5; }
 .add-column { display:flex; gap:8px; margin-top:12px; } .add-column input { min-width:0; padding:9px 10px; font-size:11px; }
 .add-column button { border:1px solid #526d36; border-radius:5px; padding:0 12px; background:var(--accent-dark); color:var(--accent); font:11px 'DM Mono',monospace; cursor:pointer; white-space:nowrap; }

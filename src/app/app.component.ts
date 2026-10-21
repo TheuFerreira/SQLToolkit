@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 type ColumnType = 'string' | 'integer' | 'decimal' | 'boolean' | 'date';
+type DefaultMode = 'value' | 'javascript' | 'sql';
 
 interface ColumnDefinition {
   originalName: string;
@@ -9,7 +10,7 @@ interface ColumnDefinition {
   enabled: boolean;
   type: ColumnType;
   defaultValue: string;
-  defaultIsFunction: boolean;
+  defaultMode: DefaultMode;
 }
 
 interface ActiveColumn {
@@ -164,7 +165,7 @@ export class AppComponent {
       enabled: true,
       type: 'string',
       defaultValue: '',
-      defaultIsFunction: false,
+      defaultMode: 'value',
     };
   }
 
@@ -217,9 +218,30 @@ export class AppComponent {
 
     const defaultValue = column.defaultValue.trim();
     if (!defaultValue) return 'NULL';
-    if (column.defaultIsFunction) return defaultValue;
+    switch (column.defaultMode) {
+      case 'sql':
+        return defaultValue;
+      case 'javascript':
+        return this.evaluateJavaScriptDefault(defaultValue, column.type);
+      case 'value':
+      default:
+        return this.convertValue(defaultValue, column.type);
+    }
+  }
 
-    return this.convertValue(defaultValue, column.type);
+  private evaluateJavaScriptDefault(source: string, type: ColumnType): string {
+    try {
+      const createFunction = new Function(`"use strict"; return (${source});`) as () => unknown;
+      const callback = createFunction();
+      if (typeof callback !== 'function') throw new TypeError('O valor informado não é uma função');
+
+      const result = (callback as () => unknown)();
+      return result === null || result === undefined
+        ? 'NULL'
+        : this.convertValue(String(result), type);
+    } catch {
+      return this.escapeString('ERRO');
+    }
   }
 
   private convertValue(value: string, type: ColumnType): string {

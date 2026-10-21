@@ -24,8 +24,12 @@
               </div>
               <div class="column-defaults" [class.column-disabled]="!column.enabled">
                 <label class="default-value-label" [for]="'default-' + index">Padrão</label>
-                <input [id]="'default-' + index" type="text" [(ngModel)]="column.defaultValue" (ngModelChange)="updateColumnNames()" [placeholder]="column.defaultIsFunction ? 'GETUTCDATE()' : 'Valor usado quando vazio'" [attr.aria-label]="'Valor padrão para ' + column.name" />
-                <label class="function-toggle"><input type="checkbox" [(ngModel)]="column.defaultIsFunction" (ngModelChange)="updateColumnNames()" /> Função SQL</label>
+                <input [id]="'default-' + index" type="text" [(ngModel)]="column.defaultValue" (ngModelChange)="updateColumnNames()" [placeholder]="column.defaultMode === 'sql' ? 'GETUTCDATE()' : column.defaultMode === 'javascript' ? '() => new Date()' : 'Valor usado quando vazio'" [attr.aria-label]="'Valor padrão para ' + column.name" />
+                <select class="default-mode" [(ngModel)]="column.defaultMode" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Modo do valor padrão para ' + column.name">
+                  <option value="value">Valor</option>
+                  <option value="javascript">Função JavaScript</option>
+                  <option value="sql">Função SQL</option>
+                </select>
               </div>
             }
           </div>
