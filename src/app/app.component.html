@@ -10,14 +10,19 @@
           <div class="columns-heading"><div><h3>Colunas detectadas</h3><span>{{ columns.length }} colunas</span></div><small>Edite os nomes para o SQL</small></div>
           <div class="column-list">
             @for (column of columns; track $index; let index = $index) {
-              <label class="column-row" [for]="'column-' + index">
+              <div class="column-row" [class.column-disabled]="!column.enabled">
                 <span class="column-number">{{ (index + 1).toString().padStart(2, '0') }}</span>
+                <input class="column-toggle" type="checkbox" [(ngModel)]="column.enabled" (ngModelChange)="updateColumnNames()" [attr.aria-label]="(column.enabled ? 'Desativar ' : 'Ativar ') + column.name" />
                 <span class="column-original" [title]="column.originalName">{{ column.originalName }}</span>
                 <span class="rename-arrow">→</span>
                 <input [id]="'column-' + index" type="text" [(ngModel)]="column.name" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Novo nome para ' + column.originalName" />
-              </label>
+              </div>
             }
           </div>
+          <form class="add-column" (submit)="$event.preventDefault(); addColumn()">
+            <input type="text" name="newColumnName" [(ngModel)]="newColumnName" placeholder="Nome da nova coluna" aria-label="Nome da nova coluna" />
+            <button type="submit" [disabled]="!newColumnName.trim()">Adicionar</button>
+          </form>
         </section>
       }
       <div class="options"><label for="tableName">Nome da tabela</label><input id="tableName" type="text" [(ngModel)]="tableName" (ngModelChange)="updateTableName()" placeholder="ex.: clientes" /></div><div class="hint">A primeira linha do CSV será usada como nome das colunas.</div>

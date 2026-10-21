@@ -4,7 +4,8 @@ import { FormsModule } from '@angular/forms';
 @Component({ selector: 'app-root', standalone: true, imports: [FormsModule], templateUrl: './app.component.html', styleUrl: './app.component.scss' })
 export class AppComponent {
   tableName = 'minha_tabela'; fileName = ''; fileMeta = ''; generatedSql = ''; rowCount = 0; statusText = 'Aguardando arquivo'; copied = false;
-  columns: { originalName: string; name: string }[] = [];
+  columns: { originalName: string; name: string; enabled: boolean; isNew: boolean }[] = [];
+  newColumnName = '';
   private selectedFile?: File;
   private dataRows: string[][] = [];
   onFileSelected(event: Event): void { const file = (event.target as HTMLInputElement).files?.[0]; if (file) this.readFile(file); }
@@ -19,7 +20,7 @@ export class AppComponent {
     if (rows.length < 2) { this.statusText = 'O CSV precisa ter cabeçalho e ao menos uma linha'; this.columns = []; this.generatedSql = ''; return; }
     this.columns = rows[0].map((header, index) => {
       const name = header.trim() || `coluna_${index + 1}`;
-      return { originalName: name, name };
+      return { originalName: name, name, enabled: true, isNew: false };
     });
     this.dataRows = rows.slice(1);
     this.fileName = this.selectedFile?.name ?? '';
@@ -29,16 +30,35 @@ export class AppComponent {
   }
   updateTableName(): void { this.updateSql(); }
   updateColumnNames(): void { this.updateSql(); }
+  addColumn(): void {
+    const name = this.newColumnName.trim();
+    if (!name) return;
+    if (this.columns.some(column => column.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      this.statusText = 'Já existe uma coluna com esse nome';
+      return;
+    }
+    this.columns = [...this.columns, { originalName: 'Nova coluna', name, enabled: true, isNew: true }];
+    this.newColumnName = '';
+    this.updateSql();
+  }
   private updateSql(): void {
     if (!this.dataRows.length || !this.columns.length) return;
     const table = this.tableName.trim() || 'minha_tabela';
-    const headers = this.columns.map(column => column.name.trim() || column.originalName);
-    this.generatedSql = this.dataRows.map(row => `INSERT INTO ${this.escapeIdentifier(table)} (${headers.map(header => this.escapeIdentifier(header)).join(', ')})\nVALUES (${headers.map((_, index) => this.escapeValue(row[index] ?? '')).join(', ')});`).join('\n\n');
+    const activeColumns = this.columns
+      .map((column, index) => ({ column, index }))
+      .filter(item => item.column.enabled);
+    if (!activeColumns.length) {
+      this.generatedSql = '';
+      this.statusText = 'Ative ao menos uma coluna para gerar o SQL';
+      return;
+    }
+    const headers = activeColumns.map(({ column }) => column.name.trim() || column.originalName);
+    this.generatedSql = this.dataRows.map(row => `INSERT INTO ${this.escapeIdentifier(table)} (${headers.map(header => this.escapeIdentifier(header)).join(', ')})\nVALUES (${activeColumns.map(({ index }) => this.escapeValue(row[index] ?? '')).join(', ')});`).join('\n\n');
     this.statusText = 'Pronto para copiar';
     this.copied = false;
   }
   async copySql(): Promise<void> { if (!this.generatedSql) return; await navigator.clipboard.writeText(this.generatedSql); this.copied = true; setTimeout(() => this.copied = false, 1600); }
-  reset(): void { this.selectedFile = undefined; this.fileName = ''; this.fileMeta = ''; this.generatedSql = ''; this.rowCount = 0; this.columns = []; this.dataRows = []; this.statusText = 'Aguardando arquivo'; this.copied = false; }
+  reset(): void { this.selectedFile = undefined; this.fileName = ''; this.fileMeta = ''; this.generatedSql = ''; this.rowCount = 0; this.columns = []; this.dataRows = []; this.newColumnName = ''; this.statusText = 'Aguardando arquivo'; this.copied = false; }
   private parseCsv(text: string): string[][] {
     const input = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n'); const rows: string[][] = []; let row: string[] = []; let value = ''; let quoted = false;
     for (let i = 0; i < input.length; i++) { const c = input[i]; if (c === '"') { if (quoted && input[i + 1] === '"') { value += '"'; i++; } else quoted = !quoted; } else if (c === ',' && !quoted) { row.push(value); value = ''; } else if (c === '\n' && !quoted) { row.push(value); if (row.some(cell => cell.trim())) rows.push(row); row = []; value = ''; } else value += c; }
