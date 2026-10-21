@@ -14,16 +14,16 @@ describe('AppComponent', () => {
     expect(app).toBeTruthy();
   });
 
-  it(`should have the 'csv-converter' title`, () => {
+  it(`should start with the default table name`, () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
-    expect(app.title).toEqual('csv-converter');
+    expect(app.tableName).toEqual('minha_tabela');
   });
 
-  it('should render title', () => {
+  it('should render the converter heading', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, csv-converter');
+    expect(compiled.querySelector('h1')?.textContent).toContain('CSV');
   });
 });
