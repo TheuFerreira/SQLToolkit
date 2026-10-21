@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { converterLatitudeDmsParaDd, converterLongitudeDmsParaDd } from './coordinate-conversion';
 
-type ColumnType = 'string' | 'integer' | 'decimal' | 'boolean' | 'date';
+type ColumnType = 'string' | 'integer' | 'decimal' | 'boolean' | 'date' | 'latitudeDms' | 'longitudeDms';
 type DefaultMode = 'value' | 'javascript' | 'sql';
 
 interface ColumnDefinition {
@@ -32,6 +33,8 @@ export class AppComponent {
     { value: 'decimal', label: 'Decimal' },
     { value: 'boolean', label: 'Booleano' },
     { value: 'date', label: 'Data' },
+    { value: 'latitudeDms', label: 'Latitude DMS → DD' },
+    { value: 'longitudeDms', label: 'Longitude DMS → DD' },
   ];
 
   tableName = 'minha_tabela';
@@ -46,6 +49,7 @@ export class AppComponent {
 
   private selectedFile?: File;
   private dataRows: string[][] = [];
+  private dmsConversionFailures = 0;
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -183,10 +187,13 @@ export class AppComponent {
     const headers = activeColumns.map(({ column }) => this.getColumnName(column));
     const columnList = headers.map(header => this.escapeIdentifier(header)).join(', ');
 
+    this.dmsConversionFailures = 0;
     this.generatedSql = this.dataRows
       .map(row => this.createInsertStatement(table, columnList, activeColumns, row))
       .join('\n\n');
-    this.statusText = 'Pronto para copiar';
+    this.statusText = this.dmsConversionFailures > 0
+      ? `${this.dmsConversionFailures} valor(es) DMS mantido(s) como texto`
+      : 'Pronto para copiar';
     this.copied = false;
   }
 
@@ -257,6 +264,10 @@ export class AppComponent {
         return this.convertBoolean(cleanValue);
       case 'date':
         return this.isValidIsoDate(cleanValue) ? `'${cleanValue}'` : this.escapeString(cleanValue);
+      case 'latitudeDms':
+        return this.convertDmsCoordinate(cleanValue, converterLatitudeDmsParaDd);
+      case 'longitudeDms':
+        return this.convertDmsCoordinate(cleanValue, converterLongitudeDmsParaDd);
       case 'string':
       default:
         return this.escapeString(cleanValue);
@@ -280,6 +291,15 @@ export class AppComponent {
     if (/^(true|1|yes|sim)$/i.test(value)) return 'TRUE';
     if (/^(false|0|no|não|nao)$/i.test(value)) return 'FALSE';
     return this.escapeString(value);
+  }
+
+  private convertDmsCoordinate(value: string, convert: (coordinate: string) => number): string {
+    try {
+      return String(convert(value));
+    } catch {
+      this.dmsConversionFailures++;
+      return this.escapeString(value);
+    }
   }
 
   private escapeString(value: string): string {

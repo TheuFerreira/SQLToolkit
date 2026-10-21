@@ -7,7 +7,7 @@
       @if (fileName) {
         <div class="file-info"><span class="file-icon">CSV</span><div><strong>{{ fileName }}</strong><span>{{ fileMeta }}</span></div><button class="icon-button" type="button" aria-label="Remover arquivo" (click)="reset()">×</button></div>
         <section class="columns-editor" aria-label="Colunas do CSV">
-          <div class="columns-heading"><div><h3>Colunas detectadas</h3><span>{{ columns.length }} colunas</span></div><small>Edite os nomes para o SQL</small></div>
+          <div class="columns-heading"><div><h3>Colunas detectadas</h3><span>{{ columns.length }} colunas</span></div><small>Renomeie e escolha o tipo de cada coluna</small></div>
           <div class="column-list">
             @for (column of columns; track $index; let index = $index) {
               <div class="column-row" [class.column-disabled]="!column.enabled">
