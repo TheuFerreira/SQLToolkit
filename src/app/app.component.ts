@@ -4,6 +4,7 @@ import { converterLatitudeDmsParaDd, converterLongitudeDmsParaDd } from './coord
 
 type ColumnType = 'string' | 'integer' | 'decimal' | 'boolean' | 'date' | 'latitudeDms' | 'longitudeDms';
 type DefaultMode = 'value' | 'javascript' | 'sql';
+type InsertMode = 'separate' | 'single';
 
 interface ColumnDefinition {
   originalName: string;
@@ -44,6 +45,7 @@ export class AppComponent {
   rowCount = 0;
   statusText = 'Aguardando arquivo';
   copied = false;
+  insertMode: InsertMode = 'separate';
   newColumnName = '';
   columns: ColumnDefinition[] = [];
 
@@ -86,6 +88,11 @@ export class AppComponent {
   }
 
   updateColumnNames(): void {
+    this.updateSql();
+  }
+
+  setInsertMode(mode: InsertMode): void {
+    this.insertMode = mode;
     this.updateSql();
   }
 
@@ -188,9 +195,10 @@ export class AppComponent {
     const columnList = headers.map(header => this.escapeIdentifier(header)).join(', ');
 
     this.dmsConversionFailures = 0;
-    this.generatedSql = this.dataRows
-      .map(row => this.createInsertStatement(table, columnList, activeColumns, row))
-      .join('\n\n');
+    const valueTuples = this.dataRows.map(row => this.createValuesTuple(activeColumns, row));
+    this.generatedSql = this.insertMode === 'single'
+      ? this.createSingleInsert(table, columnList, valueTuples)
+      : valueTuples.map(tuple => this.createInsertStatement(table, columnList, tuple)).join('\n\n');
     this.statusText = this.dmsConversionFailures > 0
       ? `${this.dmsConversionFailures} valor(es) DMS mantido(s) como texto`
       : 'Pronto para copiar';
@@ -210,14 +218,21 @@ export class AppComponent {
   private createInsertStatement(
     table: string,
     columnList: string,
-    columns: ActiveColumn[],
-    row: string[],
+    values: string,
   ): string {
+    return `INSERT INTO ${this.escapeIdentifier(table)} (${columnList})\nVALUES (${values});`;
+  }
+
+  private createSingleInsert(table: string, columnList: string, valueTuples: string[]): string {
+    const values = valueTuples.map(tuple => `  ${tuple}`).join(',\n');
+    return `INSERT INTO ${this.escapeIdentifier(table)} (${columnList})\nVALUES\n${values};`;
+  }
+
+  private createValuesTuple(columns: ActiveColumn[], row: string[]): string {
     const values = columns
       .map(({ column, index }) => this.convertColumnValue(row[index] ?? '', column))
       .join(', ');
-
-    return `INSERT INTO ${this.escapeIdentifier(table)} (${columnList})\nVALUES (${values});`;
+    return `(${values})`;
   }
 
   private convertColumnValue(value: string, column: ColumnDefinition): string {

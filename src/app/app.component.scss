@@ -47,6 +47,9 @@ input[type=text]:focus, .column-controls select:focus { border-color:var(--accen
 .copy-button { color:var(--accent); background:transparent; border:1px solid #526d36; border-radius:4px; padding:8px 11px; font:11px 'DM Mono',monospace; cursor:pointer; }
 .copy-button:disabled { color:#59645c; border-color:var(--border); }
 .output-actions { display:flex; gap:8px; }
+.insert-mode { display:flex; align-items:center; gap:7px; margin:-10px 0 14px; color:var(--muted); font:10px 'DM Mono',monospace; }
+.insert-mode button { border:1px solid var(--border); border-radius:4px; padding:7px 9px; background:#111412; color:#aeb7b0; font:10px 'DM Mono',monospace; cursor:pointer; }
+.insert-mode button.selected { border-color:#526d36; background:var(--accent-dark); color:var(--accent); }
 .download-button { color:#111312; background:var(--accent); border:1px solid var(--accent); border-radius:4px; padding:8px 11px; font:11px 'DM Mono',monospace; cursor:pointer; white-space:nowrap; }
 .download-button:disabled { opacity:.4; cursor:default; }
 .code-window { background:#101211; border:1px solid #282d29; border-radius:6px; min-height:390px; max-height:390px; overflow:auto; }
