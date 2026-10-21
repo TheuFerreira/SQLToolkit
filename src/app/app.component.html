@@ -1,31 +1,40 @@
-<main class="app-shell">
+<main class="app-shell container-fluid" data-bs-theme="dark">
   <section class="hero"><div class="eyebrow">SQL TOOLKIT</div><h1>CSV <span>→</span> SQL</h1><p>Transforme seus dados em comandos <code>INSERT</code> prontos para usar.</p></section>
-  <section class="workspace" aria-label="Conversor CSV para SQL">
-    <div class="panel import-panel">
-      <div class="panel-heading"><div><span class="step">01</span><h2>Importe seu CSV</h2></div><span class="format-badge">vírgula</span></div>
+  <section class="workspace row g-3" aria-label="Conversor CSV para SQL">
+    <div class="col-12 col-lg-5">
+    <div class="panel import-panel h-100">
+      <div class="panel-heading d-flex justify-content-between align-items-start"><div class="d-flex align-items-baseline gap-2"><span class="step">01</span><h2>Importe seu CSV</h2></div><span class="format-badge badge">vírgula</span></div>
       <label class="drop-zone" for="csvFile" (dragover)="$event.preventDefault()" (drop)="onDrop($event)"><input id="csvFile" type="file" accept=".csv,text/csv" (change)="onFileSelected($event)" /><span class="upload-icon">↑</span><strong>Arraste o arquivo aqui</strong><span>ou <u>selecione do computador</u></span><small>CSV separado por vírgulas · até 10 MB</small></label>
+      <div class="encoding-option">
+        <label class="form-label" for="csvEncoding">Codificação do CSV</label>
+        <select id="csvEncoding" class="form-select form-select-sm" [(ngModel)]="csvEncoding" (ngModelChange)="onEncodingChange()">
+          <option value="auto">Automático</option>
+          <option value="utf-8">UTF-8</option>
+          <option value="windows-1252">Windows-1252 (ANSI)</option>
+        </select>
+      </div>
       @if (fileName) {
-        <div class="file-info"><span class="file-icon">CSV</span><div><strong>{{ fileName }}</strong><span>{{ fileMeta }}</span></div><button class="icon-button" type="button" aria-label="Remover arquivo" (click)="reset()">×</button></div>
+        <div class="file-info d-flex align-items-center gap-2"><span class="file-icon badge">CSV</span><div class="flex-grow-1"><strong>{{ fileName }}</strong><span>{{ fileMeta }}</span></div><button class="icon-button btn btn-sm" type="button" aria-label="Remover arquivo" (click)="reset()">×</button></div>
         <section class="columns-editor" aria-label="Colunas do CSV">
           <div class="columns-heading"><div><h3>Colunas detectadas</h3><span>{{ columns.length }} colunas</span></div><small>Renomeie e escolha o tipo de cada coluna</small></div>
           <div class="column-list">
             @for (column of columns; track $index; let index = $index) {
               <div class="column-row" [class.column-disabled]="!column.enabled">
                 <span class="column-number">{{ (index + 1).toString().padStart(2, '0') }}</span>
-                <input class="column-toggle" type="checkbox" [(ngModel)]="column.enabled" (ngModelChange)="updateColumnNames()" [attr.aria-label]="(column.enabled ? 'Desativar ' : 'Ativar ') + column.name" />
+                <input class="column-toggle form-check-input" type="checkbox" [(ngModel)]="column.enabled" (ngModelChange)="updateColumnNames()" [attr.aria-label]="(column.enabled ? 'Desativar ' : 'Ativar ') + column.name" />
                 <span class="column-original" [title]="column.originalName">{{ column.originalName }}</span>
                 <span class="rename-arrow">→</span>
                 <div class="column-controls">
-                  <input [id]="'column-' + index" type="text" [(ngModel)]="column.name" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Novo nome para ' + column.originalName" />
-                  <select [(ngModel)]="column.type" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Tipo da coluna ' + column.name">
+                  <input class="form-control form-control-sm" [id]="'column-' + index" type="text" [(ngModel)]="column.name" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Novo nome para ' + column.originalName" />
+                  <select class="form-select form-select-sm" [(ngModel)]="column.type" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Tipo da coluna ' + column.name">
                     @for (type of columnTypes; track type.value) { <option [value]="type.value">{{ type.label }}</option> }
                   </select>
                 </div>
               </div>
               <div class="column-defaults" [class.column-disabled]="!column.enabled">
                 <label class="default-value-label" [for]="'default-' + index">Padrão</label>
-                <input [id]="'default-' + index" type="text" [(ngModel)]="column.defaultValue" (ngModelChange)="updateColumnNames()" [placeholder]="column.defaultMode === 'sql' ? 'GETUTCDATE()' : column.defaultMode === 'javascript' ? '() => new Date()' : 'Valor usado quando vazio'" [attr.aria-label]="'Valor padrão para ' + column.name" />
-                <select class="default-mode" [(ngModel)]="column.defaultMode" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Modo do valor padrão para ' + column.name">
+                <input class="form-control form-control-sm" [id]="'default-' + index" type="text" [(ngModel)]="column.defaultValue" (ngModelChange)="updateColumnNames()" [placeholder]="column.defaultMode === 'sql' ? 'GETUTCDATE()' : column.defaultMode === 'javascript' ? '() => new Date()' : 'Valor usado quando vazio'" [attr.aria-label]="'Valor padrão para ' + column.name" />
+                <select class="default-mode form-select form-select-sm" [(ngModel)]="column.defaultMode" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Modo do valor padrão para ' + column.name">
                   <option value="value">Valor</option>
                   <option value="javascript">Função JavaScript</option>
                   <option value="sql">Função SQL</option>
@@ -34,22 +43,25 @@
             }
           </div>
           <form class="add-column" (submit)="$event.preventDefault(); addColumn()">
-            <input type="text" name="newColumnName" [(ngModel)]="newColumnName" placeholder="Nome da nova coluna" aria-label="Nome da nova coluna" />
-            <button type="submit" [disabled]="!newColumnName.trim()">Adicionar</button>
+            <input class="form-control form-control-sm" type="text" name="newColumnName" [(ngModel)]="newColumnName" placeholder="Nome da nova coluna" aria-label="Nome da nova coluna" />
+            <button class="btn btn-outline-primary btn-sm" type="submit" [disabled]="!newColumnName.trim()">Adicionar</button>
           </form>
         </section>
       }
-      <div class="options"><label for="tableName">Nome da tabela</label><input id="tableName" type="text" [(ngModel)]="tableName" (ngModelChange)="updateTableName()" placeholder="ex.: clientes" /></div><div class="hint">A primeira linha do CSV será usada como nome das colunas.</div>
+      <div class="options"><label class="form-label" for="tableName">Nome da tabela</label><input class="form-control" id="tableName" type="text" [(ngModel)]="tableName" (ngModelChange)="updateTableName()" placeholder="ex.: clientes" /></div><div class="hint form-text">A primeira linha do CSV será usada como nome das colunas.</div>
     </div>
-    <div class="panel output-panel">
-      <div class="panel-heading"><div><span class="step">02</span><h2>SQL gerado</h2></div><div class="output-actions"><button class="copy-button" type="button" [disabled]="!generatedSql" (click)="copySql()">{{ copied ? 'Copiado ✓' : 'Copiar SQL' }}</button><button class="download-button" type="button" [disabled]="!generatedSql" (click)="downloadSql()">Baixar .sql</button></div></div>
+    </div>
+    <div class="col-12 col-lg-7">
+    <div class="panel output-panel h-100">
+      <div class="panel-heading d-flex justify-content-between align-items-start"><div class="d-flex align-items-baseline gap-2"><span class="step">02</span><h2>SQL gerado</h2></div><div class="output-actions d-flex gap-2"><button class="copy-button btn btn-outline-primary btn-sm" type="button" [disabled]="!generatedSql" (click)="copySql()">{{ copied ? 'Copiado ✓' : 'Copiar SQL' }}</button><button class="download-button btn btn-primary btn-sm" type="button" [disabled]="!generatedSql" (click)="downloadSql()">Baixar .sql</button></div></div>
       <div class="insert-mode" role="group" aria-label="Formato dos comandos INSERT">
         <span>Formato</span>
-        <button type="button" [class.selected]="insertMode === 'separate'" [attr.aria-pressed]="insertMode === 'separate'" (click)="setInsertMode('separate')">Um INSERT por registro</button>
-        <button type="button" [class.selected]="insertMode === 'single'" [attr.aria-pressed]="insertMode === 'single'" (click)="setInsertMode('single')">INSERT único</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" [class.selected]="insertMode === 'separate'" [attr.aria-pressed]="insertMode === 'separate'" (click)="setInsertMode('separate')">Um INSERT por registro</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" [class.selected]="insertMode === 'single'" [attr.aria-pressed]="insertMode === 'single'" (click)="setInsertMode('single')">INSERT único</button>
       </div>
       <div class="code-window">@if (generatedSql) { <pre class="sql-output">{{ generatedSql }}</pre> } @else { <div class="code-placeholder"><span class="terminal-mark">⌁</span><p>Seu SQL aparecerá aqui</p><small>Importe um CSV para começar</small></div> }</div>
       <div class="output-footer"><span>{{ rowCount }} registros</span><span>{{ statusText }}</span></div>
+    </div>
     </div>
   </section>
   <footer>Processamento 100% local · seus dados não saem do navegador</footer>

@@ -5,6 +5,7 @@ import { converterLatitudeDmsParaDd, converterLongitudeDmsParaDd } from './coord
 type ColumnType = 'string' | 'integer' | 'decimal' | 'boolean' | 'date' | 'latitudeDms' | 'longitudeDms';
 type DefaultMode = 'value' | 'javascript' | 'sql';
 type InsertMode = 'separate' | 'single';
+type CsvEncoding = 'auto' | 'utf-8' | 'windows-1252';
 
 interface ColumnDefinition {
   originalName: string;
@@ -46,10 +47,12 @@ export class AppComponent {
   statusText = 'Aguardando arquivo';
   copied = false;
   insertMode: InsertMode = 'separate';
+  csvEncoding: CsvEncoding = 'auto';
   newColumnName = '';
   columns: ColumnDefinition[] = [];
 
   private selectedFile?: File;
+  private fileBytes?: ArrayBuffer;
   private dataRows: string[][] = [];
   private dmsConversionFailures = 0;
 
@@ -77,10 +80,64 @@ export class AppComponent {
     }
 
     this.selectedFile = file;
+    this.fileBytes = undefined;
+    this.dataRows = [];
+    this.columns = [];
+    this.generatedSql = '';
+    this.rowCount = 0;
+    this.fileName = '';
+    this.fileMeta = '';
     const reader = new FileReader();
-    reader.onload = () => this.loadCsv(String(reader.result ?? ''));
-    reader.onerror = () => this.statusText = 'Não foi possível ler o arquivo';
-    reader.readAsText(file, 'UTF-8');
+    reader.onload = () => {
+      if (this.selectedFile !== file) return;
+      if (!(reader.result instanceof ArrayBuffer)) {
+        this.statusText = 'Não foi possível ler o arquivo';
+        return;
+      }
+      this.fileBytes = reader.result;
+      this.decodeSelectedFile();
+    };
+    reader.onerror = () => {
+      if (this.selectedFile === file) this.statusText = 'Não foi possível ler o arquivo';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  onEncodingChange(): void {
+    if (this.fileBytes) this.decodeSelectedFile();
+  }
+
+  private decodeSelectedFile(): void {
+    if (!this.fileBytes) return;
+
+    try {
+      const bytes = new Uint8Array(this.fileBytes);
+      let encoding: string = this.csvEncoding;
+
+      if (encoding === 'auto') {
+        if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+          encoding = 'utf-16le';
+        } else if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
+          encoding = 'utf-16be';
+        } else {
+          try {
+            new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            encoding = 'utf-8';
+          } catch {
+            encoding = 'windows-1252';
+          }
+        }
+      }
+
+      const text = new TextDecoder(encoding, { fatal: true }).decode(bytes);
+      this.loadCsv(text, encoding);
+    } catch {
+      this.columns = [];
+      this.dataRows = [];
+      this.generatedSql = '';
+      this.rowCount = 0;
+      this.statusText = 'Codificação inválida. Selecione Automático ou Windows-1252.';
+    }
   }
 
   updateTableName(): void {
@@ -132,6 +189,7 @@ export class AppComponent {
 
   reset(): void {
     this.selectedFile = undefined;
+    this.fileBytes = undefined;
     this.dataRows = [];
     this.columns = [];
     this.fileName = '';
@@ -147,7 +205,7 @@ export class AppComponent {
     return file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
   }
 
-  private loadCsv(text: string): void {
+  private loadCsv(text: string, encoding: string): void {
     const [headerRow, ...dataRows] = this.parseCsv(text);
 
     if (!headerRow || dataRows.length === 0) {
@@ -165,7 +223,7 @@ export class AppComponent {
     this.dataRows = dataRows;
     this.rowCount = dataRows.length;
     this.fileName = this.selectedFile?.name ?? '';
-    this.fileMeta = `${this.rowCount} registros · ${((this.selectedFile?.size ?? 0) / 1024).toFixed(1)} KB`;
+    this.fileMeta = `${this.rowCount} registros · ${((this.selectedFile?.size ?? 0) / 1024).toFixed(1)} KB · ${encoding.toUpperCase()}`;
     this.updateSql();
   }
 
