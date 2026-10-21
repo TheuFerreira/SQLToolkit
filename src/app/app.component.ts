@@ -11,7 +11,7 @@ export class AppComponent {
     { value: 'date', label: 'Data' },
   ] as const;
   tableName = 'minha_tabela'; fileName = ''; fileMeta = ''; generatedSql = ''; rowCount = 0; statusText = 'Aguardando arquivo'; copied = false;
-  columns: { originalName: string; name: string; enabled: boolean; isNew: boolean; type: string }[] = [];
+  columns: { originalName: string; name: string; enabled: boolean; isNew: boolean; type: string; defaultValue: string; defaultIsFunction: boolean }[] = [];
   newColumnName = '';
   private selectedFile?: File;
   private dataRows: string[][] = [];
@@ -27,7 +27,7 @@ export class AppComponent {
     if (rows.length < 2) { this.statusText = 'O CSV precisa ter cabeçalho e ao menos uma linha'; this.columns = []; this.generatedSql = ''; return; }
     this.columns = rows[0].map((header, index) => {
       const name = header.trim() || `coluna_${index + 1}`;
-      return { originalName: name, name, enabled: true, isNew: false, type: 'string' };
+      return { originalName: name, name, enabled: true, isNew: false, type: 'string', defaultValue: '', defaultIsFunction: false };
     });
     this.dataRows = rows.slice(1);
     this.fileName = this.selectedFile?.name ?? '';
@@ -44,7 +44,7 @@ export class AppComponent {
       this.statusText = 'Já existe uma coluna com esse nome';
       return;
     }
-    this.columns = [...this.columns, { originalName: 'Nova coluna', name, enabled: true, isNew: true, type: 'string' }];
+    this.columns = [...this.columns, { originalName: 'Nova coluna', name, enabled: true, isNew: true, type: 'string', defaultValue: '', defaultIsFunction: false }];
     this.newColumnName = '';
     this.updateSql();
   }
@@ -60,7 +60,7 @@ export class AppComponent {
       return;
     }
     const headers = activeColumns.map(({ column }) => column.name.trim() || column.originalName);
-    this.generatedSql = this.dataRows.map(row => `INSERT INTO ${this.escapeIdentifier(table)} (${headers.map(header => this.escapeIdentifier(header)).join(', ')})\nVALUES (${activeColumns.map(({ column, index }) => this.convertValue(row[index] ?? '', column.type)).join(', ')});`).join('\n\n');
+    this.generatedSql = this.dataRows.map(row => `INSERT INTO ${this.escapeIdentifier(table)} (${headers.map(header => this.escapeIdentifier(header)).join(', ')})\nVALUES (${activeColumns.map(({ column, index }) => this.convertColumnValue(row[index] ?? '', column)).join(', ')});`).join('\n\n');
     this.statusText = 'Pronto para copiar';
     this.copied = false;
   }
@@ -89,6 +89,14 @@ export class AppComponent {
     }
     if (type === 'date' && this.isValidIsoDate(clean)) return `'${clean}'`;
     return `'${clean.replaceAll("'", "''")}'`;
+  }
+
+  private convertColumnValue(value: string, column: AppComponent['columns'][number]): string {
+    const cleanValue = value.trim();
+    if (cleanValue) return this.convertValue(cleanValue, column.type);
+    const defaultValue = column.defaultValue.trim();
+    if (!defaultValue) return 'NULL';
+    return column.defaultIsFunction ? defaultValue : this.convertValue(defaultValue, column.type);
   }
 
   private isValidIsoDate(value: string): boolean {
