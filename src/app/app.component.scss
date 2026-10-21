@@ -52,7 +52,7 @@ input[type=text]:focus, .column-controls select:focus, .column-defaults select:f
 .code-placeholder { height:390px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#69736c; }
 .terminal-mark { font:28px 'DM Mono',monospace; color:#566259; } .code-placeholder p { font-size:13px; margin:12px 0 5px; color:#9ca69e; }
 .code-placeholder small { font:10px 'DM Mono',monospace; } .sql-output { margin:0; padding:20px; color:var(--accent); font:12px/1.75 'DM Mono',monospace; white-space:pre-wrap; word-break:break-word; }
-.output-footer { display:flex; justify-content:space-between; color:#69736c; font-size:10px; margin-top:14px; }
+.output-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 12px; color:#69736c; font-size:10px; margin-top:14px; }
 footer { color:#59645c; text-align:center; font:10px 'DM Mono',monospace; margin-top:25px; }
 @media(max-width:991.98px) { .app-shell { padding-top:42px; width:min(100% - 28px,600px); } .panel { min-height:auto; } .code-window { min-height:300px; } .code-placeholder { height:300px; } }
 @media(max-width:575.98px) {

@@ -2,6 +2,12 @@
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.2.27.
 
+## Importação do CSV
+
+O conversor detecta automaticamente UTF-8 (com alternativa Windows-1252) e o separador do arquivo (vírgula, ponto e vírgula ou tabulação). Os dois ajustes também podem ser escolhidos manualmente na interface. Linhas com quantidade incorreta de colunas ou aspas malformadas são rejeitadas com indicação da linha.
+
+A prévia e o botão **Copiar prévia** mostram até 100 registros. O download gera todos os registros em lotes, inclusive quando a prévia é limitada. Se uma função JavaScript usada como valor padrão falhar, a interface mostra a linha e a coluna e bloqueia a saída incompleta.
+
 ## Conversão de coordenadas DMS para DD
 
 As funções abaixo convertem coordenadas em graus, minutos e segundos (DMS) para graus decimais (DD). Elas aceitam `°`, `º` ou `§` como marcador de grau. Por exemplo, `-22° 32' 50"` retorna aproximadamente `-22.5472222222`.

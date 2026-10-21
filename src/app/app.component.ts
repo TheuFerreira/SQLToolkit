@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { converterLatitudeDmsParaDd, converterLongitudeDmsParaDd } from './coordinate-conversion';
+import { CsvDelimiter, CsvRecord, detectDelimiter, parseCsv } from './csv-parser';
 
 type ColumnType = 'string' | 'integer' | 'decimal' | 'boolean' | 'date' | 'latitudeDms' | 'longitudeDms';
 type DefaultMode = 'value' | 'javascript' | 'sql';
@@ -29,6 +30,8 @@ interface ActiveColumn {
   styleUrl: './app.component.scss',
 })
 export class AppComponent {
+  private readonly previewLimit = 100;
+  private readonly downloadBatchSize = 500;
   readonly columnTypes: { value: ColumnType; label: string }[] = [
     { value: 'string', label: 'Texto' },
     { value: 'integer', label: 'Inteiro' },
@@ -48,17 +51,24 @@ export class AppComponent {
   copied = false;
   insertMode: InsertMode = 'separate';
   csvEncoding: CsvEncoding = 'auto';
+  csvDelimiter: 'auto' | CsvDelimiter = 'auto';
+  delimiterLabel = 'automático';
+  previewRowCount = 0;
+  errorText = '';
+  isGeneratingDownload = false;
   newColumnName = '';
   columns: ColumnDefinition[] = [];
 
   private selectedFile?: File;
   private fileBytes?: ArrayBuffer;
-  private dataRows: string[][] = [];
+  private dataRows: CsvRecord[] = [];
   private dmsConversionFailures = 0;
+  private revision = 0;
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
+    input.value = '';
     if (file) this.readFile(file);
   }
 
@@ -68,18 +78,23 @@ export class AppComponent {
     if (file) this.readFile(file);
   }
 
-  readFile(file: File): void {
+  async readFile(file: File): Promise<void> {
     if (!this.isCsvFile(file)) {
-      this.statusText = 'Selecione um arquivo CSV válido';
+      this.reset();
+      this.errorText = 'Selecione um arquivo CSV válido';
+      this.statusText = this.errorText;
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      this.statusText = 'O arquivo deve ter no máximo 10 MB';
+      this.reset();
+      this.errorText = 'O arquivo deve ter no máximo 10 MB';
+      this.statusText = this.errorText;
       return;
     }
 
     this.selectedFile = file;
+    this.revision++;
     this.fileBytes = undefined;
     this.dataRows = [];
     this.columns = [];
@@ -87,23 +102,24 @@ export class AppComponent {
     this.rowCount = 0;
     this.fileName = '';
     this.fileMeta = '';
-    const reader = new FileReader();
-    reader.onload = () => {
+    this.previewRowCount = 0;
+    this.errorText = '';
+    this.statusText = 'Lendo arquivo...';
+    try {
+      const bytes = await file.arrayBuffer();
       if (this.selectedFile !== file) return;
-      if (!(reader.result instanceof ArrayBuffer)) {
-        this.statusText = 'Não foi possível ler o arquivo';
-        return;
-      }
-      this.fileBytes = reader.result;
+      this.fileBytes = bytes;
       this.decodeSelectedFile();
-    };
-    reader.onerror = () => {
+    } catch {
       if (this.selectedFile === file) this.statusText = 'Não foi possível ler o arquivo';
-    };
-    reader.readAsArrayBuffer(file);
+    }
   }
 
   onEncodingChange(): void {
+    if (this.fileBytes) this.decodeSelectedFile();
+  }
+
+  onDelimiterChange(): void {
     if (this.fileBytes) this.decodeSelectedFile();
   }
 
@@ -129,14 +145,23 @@ export class AppComponent {
         }
       }
 
-      const text = new TextDecoder(encoding, { fatal: true }).decode(bytes);
+      let text: string;
+      try {
+        text = new TextDecoder(encoding, { fatal: true }).decode(bytes);
+      } catch {
+        throw new Error('Codificação inválida. Selecione Automático ou Windows-1252.');
+      }
       this.loadCsv(text, encoding);
-    } catch {
+    } catch (error) {
       this.columns = [];
       this.dataRows = [];
       this.generatedSql = '';
       this.rowCount = 0;
-      this.statusText = 'Codificação inválida. Selecione Automático ou Windows-1252.';
+      this.previewRowCount = 0;
+      this.fileName = '';
+      this.fileMeta = '';
+      this.errorText = error instanceof Error ? error.message : 'Não foi possível interpretar o CSV.';
+      this.statusText = this.errorText;
     }
   }
 
@@ -175,19 +200,56 @@ export class AppComponent {
     setTimeout(() => this.copied = false, 1600);
   }
 
-  downloadSql(): void {
-    if (!this.generatedSql) return;
+  async downloadSql(): Promise<void> {
+    if (!this.generatedSql || this.isGeneratingDownload) return;
 
-    const fileContent = new Blob([this.generatedSql], { type: 'application/sql;charset=utf-8' });
-    const downloadUrl = URL.createObjectURL(fileContent);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = this.getSqlFileName();
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    const revision = this.revision;
+    const rows = this.dataRows;
+    const columns = this.getActiveColumns().map(({ column, index }) => ({ column: { ...column }, index }));
+    const table = this.tableName.trim() || 'minha_tabela';
+    const columnList = columns.map(({ column }) => this.escapeIdentifier(this.getColumnName(column))).join(', ');
+    const mode = this.insertMode;
+    const parts: BlobPart[] = [];
+    this.isGeneratingDownload = true;
+    this.statusText = 'Gerando arquivo SQL...';
+
+    try {
+      if (mode === 'single') parts.push(`INSERT INTO ${this.escapeIdentifier(table)} (${columnList})\nVALUES\n`);
+
+      for (let start = 0; start < rows.length; start += this.downloadBatchSize) {
+        if (revision !== this.revision) return;
+        const batch = rows.slice(start, start + this.downloadBatchSize);
+        const tuples = batch.map(row => this.createValuesTuple(columns, row));
+        if (mode === 'single') {
+          parts.push(start > 0 ? ',\n' : '');
+          parts.push(tuples.map(tuple => `  ${tuple}`).join(',\n'));
+        } else {
+          parts.push(start > 0 ? '\n\n' : '');
+          parts.push(tuples.map(tuple => this.createInsertStatement(table, columnList, tuple)).join('\n\n'));
+        }
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+      }
+
+      if (revision !== this.revision) return;
+      if (mode === 'single') parts.push(';');
+      const fileContent = new Blob(parts, { type: 'application/sql;charset=utf-8' });
+      const downloadUrl = URL.createObjectURL(fileContent);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = this.getSqlFileName();
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      this.statusText = 'Arquivo SQL pronto';
+    } catch (error) {
+      if (revision !== this.revision) return;
+      this.setGenerationError(error);
+    } finally {
+      this.isGeneratingDownload = false;
+    }
   }
 
   reset(): void {
+    this.revision++;
     this.selectedFile = undefined;
     this.fileBytes = undefined;
     this.dataRows = [];
@@ -196,6 +258,9 @@ export class AppComponent {
     this.fileMeta = '';
     this.generatedSql = '';
     this.rowCount = 0;
+    this.previewRowCount = 0;
+    this.errorText = '';
+    this.delimiterLabel = 'automático';
     this.newColumnName = '';
     this.statusText = 'Aguardando arquivo';
     this.copied = false;
@@ -206,24 +271,31 @@ export class AppComponent {
   }
 
   private loadCsv(text: string, encoding: string): void {
-    const [headerRow, ...dataRows] = this.parseCsv(text);
+    this.revision++;
+    this.errorText = '';
+    const delimiter = this.csvDelimiter === 'auto' ? detectDelimiter(text) : this.csvDelimiter;
+    this.delimiterLabel = delimiter === ',' ? 'vírgula' : delimiter === ';' ? 'ponto e vírgula' : 'tabulação';
+    const [headerRow, ...dataRows] = parseCsv(text, delimiter);
 
     if (!headerRow || dataRows.length === 0) {
       this.columns = [];
       this.dataRows = [];
       this.generatedSql = '';
-      this.statusText = 'O CSV precisa ter cabeçalho e ao menos uma linha';
+      this.rowCount = 0;
+      this.previewRowCount = 0;
+      this.errorText = 'O CSV precisa ter cabeçalho e ao menos uma linha';
+      this.statusText = this.errorText;
       return;
     }
 
-    this.columns = headerRow.map((header, index) => {
+    this.columns = headerRow.values.map((header, index) => {
       const name = header.trim() || `coluna_${index + 1}`;
       return this.createColumn(name, name);
     });
     this.dataRows = dataRows;
     this.rowCount = dataRows.length;
     this.fileName = this.selectedFile?.name ?? '';
-    this.fileMeta = `${this.rowCount} registros · ${((this.selectedFile?.size ?? 0) / 1024).toFixed(1)} KB · ${encoding.toUpperCase()}`;
+    this.fileMeta = `${this.rowCount} registros · ${((this.selectedFile?.size ?? 0) / 1024).toFixed(1)} KB · ${encoding.toUpperCase()} · ${this.delimiterLabel}`;
     this.updateSql();
   }
 
@@ -239,6 +311,8 @@ export class AppComponent {
   }
 
   private updateSql(): void {
+    this.revision++;
+    this.errorText = '';
     if (this.dataRows.length === 0 || this.columns.length === 0) return;
 
     const activeColumns = this.getActiveColumns();
@@ -253,20 +327,48 @@ export class AppComponent {
     const columnList = headers.map(header => this.escapeIdentifier(header)).join(', ');
 
     this.dmsConversionFailures = 0;
-    const valueTuples = this.dataRows.map(row => this.createValuesTuple(activeColumns, row));
-    this.generatedSql = this.insertMode === 'single'
-      ? this.createSingleInsert(table, columnList, valueTuples)
-      : valueTuples.map(tuple => this.createInsertStatement(table, columnList, tuple)).join('\n\n');
-    this.statusText = this.dmsConversionFailures > 0
-      ? `${this.dmsConversionFailures} valor(es) DMS mantido(s) como texto`
-      : 'Pronto para copiar';
-    this.copied = false;
+    this.previewRowCount = Math.min(this.dataRows.length, this.previewLimit);
+    try {
+      const valueTuples = this.dataRows
+        .slice(0, this.previewLimit)
+        .map(row => this.createValuesTuple(activeColumns, row));
+      this.generatedSql = this.insertMode === 'single'
+        ? this.createSingleInsert(table, columnList, valueTuples)
+        : valueTuples.map(tuple => this.createInsertStatement(table, columnList, tuple)).join('\n\n');
+      this.validateDefaultsBeyondPreview(activeColumns);
+      this.statusText = this.dmsConversionFailures > 0
+        ? `${this.dmsConversionFailures} valor(es) DMS mantido(s) como texto na prévia`
+        : this.rowCount > this.previewLimit ? 'Prévia limitada; o download inclui todos os registros' : 'Pronto para copiar';
+      this.copied = false;
+    } catch (error) {
+      this.setGenerationError(error);
+    }
   }
 
   private getActiveColumns(): ActiveColumn[] {
     return this.columns
       .map((column, index) => ({ column, index }))
       .filter(({ column }) => column.enabled);
+  }
+
+  private validateDefaultsBeyondPreview(columns: ActiveColumn[]): void {
+    for (const { column, index } of columns) {
+      if (column.defaultMode !== 'javascript' || !column.defaultValue.trim()) continue;
+      let row: CsvRecord | undefined;
+      for (let rowIndex = this.previewLimit; rowIndex < this.dataRows.length; rowIndex++) {
+        if (!(this.dataRows[rowIndex].values[index] ?? '').trim()) {
+          row = this.dataRows[rowIndex];
+          break;
+        }
+      }
+      if (!row) continue;
+      try {
+        this.evaluateJavaScriptDefault(column.defaultValue.trim(), column.type);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'erro desconhecido';
+        throw new Error(`Linha ${row.line}, coluna "${this.getColumnName(column)}": ${reason}`);
+      }
+    }
   }
 
   private getColumnName(column: ColumnDefinition): string {
@@ -286,9 +388,16 @@ export class AppComponent {
     return `INSERT INTO ${this.escapeIdentifier(table)} (${columnList})\nVALUES\n${values};`;
   }
 
-  private createValuesTuple(columns: ActiveColumn[], row: string[]): string {
+  private createValuesTuple(columns: ActiveColumn[], row: CsvRecord): string {
     const values = columns
-      .map(({ column, index }) => this.convertColumnValue(row[index] ?? '', column))
+      .map(({ column, index }) => {
+        try {
+          return this.convertColumnValue(row.values[index] ?? '', column);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'erro desconhecido';
+          throw new Error(`Linha ${row.line}, coluna "${this.getColumnName(column)}": ${reason}`);
+        }
+      })
       .join(', ');
     return `(${values})`;
   }
@@ -319,9 +428,17 @@ export class AppComponent {
       return result === null || result === undefined
         ? 'NULL'
         : this.convertValue(String(result), type);
-    } catch {
-      return this.escapeString('ERRO');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'erro desconhecido';
+      throw new Error(`função JavaScript padrão falhou: ${reason}`);
     }
+  }
+
+  private setGenerationError(error: unknown): void {
+    this.generatedSql = '';
+    this.previewRowCount = 0;
+    this.errorText = error instanceof Error ? error.message : 'Não foi possível gerar o SQL.';
+    this.statusText = 'Corrija o erro antes de copiar ou baixar o SQL';
   }
 
   private convertValue(value: string, type: ColumnType): string {
@@ -391,47 +508,6 @@ export class AppComponent {
     const safeTableName = (this.tableName.trim() || 'minha_tabela')
       .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_');
     return `${safeTableName}.sql`;
-  }
-
-  private parseCsv(text: string): string[][] {
-    const input = text
-      .replace(/^\uFEFF/, '')
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n');
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentValue = '';
-    let isQuoted = false;
-
-    for (let index = 0; index < input.length; index++) {
-      const character = input[index];
-
-      if (character === '"') {
-        if (isQuoted && input[index + 1] === '"') {
-          currentValue += '"';
-          index++;
-        } else {
-          isQuoted = !isQuoted;
-        }
-      } else if (character === ',' && !isQuoted) {
-        currentRow.push(currentValue);
-        currentValue = '';
-      } else if (character === '\n' && !isQuoted) {
-        this.pushNonEmptyRow(rows, currentRow, currentValue);
-        currentRow = [];
-        currentValue = '';
-      } else {
-        currentValue += character;
-      }
-    }
-
-    this.pushNonEmptyRow(rows, currentRow, currentValue);
-    return rows;
-  }
-
-  private pushNonEmptyRow(rows: string[][], row: string[], lastValue: string): void {
-    const completedRow = [...row, lastValue];
-    if (completedRow.some(cell => cell.trim())) rows.push(completedRow);
   }
 
   private isValidIsoDate(value: string): boolean {
