@@ -106,6 +106,18 @@ export class AppComponent {
     setTimeout(() => this.copied = false, 1600);
   }
 
+  downloadSql(): void {
+    if (!this.generatedSql) return;
+
+    const fileContent = new Blob([this.generatedSql], { type: 'application/sql;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(fileContent);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = this.getSqlFileName();
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  }
+
   reset(): void {
     this.selectedFile = undefined;
     this.dataRows = [];
@@ -258,6 +270,12 @@ export class AppComponent {
 
   private hasSameName(first: string, second: string): boolean {
     return first.trim().toLocaleLowerCase() === second.trim().toLocaleLowerCase();
+  }
+
+  private getSqlFileName(): string {
+    const safeTableName = (this.tableName.trim() || 'minha_tabela')
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_');
+    return `${safeTableName}.sql`;
   }
 
   private parseCsv(text: string): string[][] {
