@@ -4,7 +4,22 @@
     <div class="panel import-panel">
       <div class="panel-heading"><div><span class="step">01</span><h2>Importe seu CSV</h2></div><span class="format-badge">vírgula</span></div>
       <label class="drop-zone" for="csvFile" (dragover)="$event.preventDefault()" (drop)="onDrop($event)"><input id="csvFile" type="file" accept=".csv,text/csv" (change)="onFileSelected($event)" /><span class="upload-icon">↑</span><strong>Arraste o arquivo aqui</strong><span>ou <u>selecione do computador</u></span><small>CSV separado por vírgulas · até 10 MB</small></label>
-      @if (fileName) { <div class="file-info"><span class="file-icon">CSV</span><div><strong>{{ fileName }}</strong><span>{{ fileMeta }}</span></div><button class="icon-button" type="button" aria-label="Remover arquivo" (click)="reset()">×</button></div> }
+      @if (fileName) {
+        <div class="file-info"><span class="file-icon">CSV</span><div><strong>{{ fileName }}</strong><span>{{ fileMeta }}</span></div><button class="icon-button" type="button" aria-label="Remover arquivo" (click)="reset()">×</button></div>
+        <section class="columns-editor" aria-label="Colunas do CSV">
+          <div class="columns-heading"><div><h3>Colunas detectadas</h3><span>{{ columns.length }} colunas</span></div><small>Edite os nomes para o SQL</small></div>
+          <div class="column-list">
+            @for (column of columns; track $index; let index = $index) {
+              <label class="column-row" [for]="'column-' + index">
+                <span class="column-number">{{ (index + 1).toString().padStart(2, '0') }}</span>
+                <span class="column-original" [title]="column.originalName">{{ column.originalName }}</span>
+                <span class="rename-arrow">→</span>
+                <input [id]="'column-' + index" type="text" [(ngModel)]="column.name" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Novo nome para ' + column.originalName" />
+              </label>
+            }
+          </div>
+        </section>
+      }
       <div class="options"><label for="tableName">Nome da tabela</label><input id="tableName" type="text" [(ngModel)]="tableName" (ngModelChange)="updateTableName()" placeholder="ex.: clientes" /></div><div class="hint">A primeira linha do CSV será usada como nome das colunas.</div>
     </div>
     <div class="panel output-panel">
