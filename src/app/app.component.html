@@ -15,7 +15,12 @@
                 <input class="column-toggle" type="checkbox" [(ngModel)]="column.enabled" (ngModelChange)="updateColumnNames()" [attr.aria-label]="(column.enabled ? 'Desativar ' : 'Ativar ') + column.name" />
                 <span class="column-original" [title]="column.originalName">{{ column.originalName }}</span>
                 <span class="rename-arrow">→</span>
-                <input [id]="'column-' + index" type="text" [(ngModel)]="column.name" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Novo nome para ' + column.originalName" />
+                <div class="column-controls">
+                  <input [id]="'column-' + index" type="text" [(ngModel)]="column.name" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Novo nome para ' + column.originalName" />
+                  <select [(ngModel)]="column.type" (ngModelChange)="updateColumnNames()" [attr.aria-label]="'Tipo da coluna ' + column.name">
+                    @for (type of columnTypes; track type.value) { <option [value]="type.value">{{ type.label }}</option> }
+                  </select>
+                </div>
               </div>
             }
           </div>

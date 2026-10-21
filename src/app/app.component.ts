@@ -3,8 +3,15 @@ import { FormsModule } from '@angular/forms';
 
 @Component({ selector: 'app-root', standalone: true, imports: [FormsModule], templateUrl: './app.component.html', styleUrl: './app.component.scss' })
 export class AppComponent {
+  readonly columnTypes = [
+    { value: 'string', label: 'Texto' },
+    { value: 'integer', label: 'Inteiro' },
+    { value: 'decimal', label: 'Decimal' },
+    { value: 'boolean', label: 'Booleano' },
+    { value: 'date', label: 'Data' },
+  ] as const;
   tableName = 'minha_tabela'; fileName = ''; fileMeta = ''; generatedSql = ''; rowCount = 0; statusText = 'Aguardando arquivo'; copied = false;
-  columns: { originalName: string; name: string; enabled: boolean; isNew: boolean }[] = [];
+  columns: { originalName: string; name: string; enabled: boolean; isNew: boolean; type: string }[] = [];
   newColumnName = '';
   private selectedFile?: File;
   private dataRows: string[][] = [];
@@ -20,7 +27,7 @@ export class AppComponent {
     if (rows.length < 2) { this.statusText = 'O CSV precisa ter cabeçalho e ao menos uma linha'; this.columns = []; this.generatedSql = ''; return; }
     this.columns = rows[0].map((header, index) => {
       const name = header.trim() || `coluna_${index + 1}`;
-      return { originalName: name, name, enabled: true, isNew: false };
+      return { originalName: name, name, enabled: true, isNew: false, type: 'string' };
     });
     this.dataRows = rows.slice(1);
     this.fileName = this.selectedFile?.name ?? '';
@@ -37,7 +44,7 @@ export class AppComponent {
       this.statusText = 'Já existe uma coluna com esse nome';
       return;
     }
-    this.columns = [...this.columns, { originalName: 'Nova coluna', name, enabled: true, isNew: true }];
+    this.columns = [...this.columns, { originalName: 'Nova coluna', name, enabled: true, isNew: true, type: 'string' }];
     this.newColumnName = '';
     this.updateSql();
   }
@@ -53,7 +60,7 @@ export class AppComponent {
       return;
     }
     const headers = activeColumns.map(({ column }) => column.name.trim() || column.originalName);
-    this.generatedSql = this.dataRows.map(row => `INSERT INTO ${this.escapeIdentifier(table)} (${headers.map(header => this.escapeIdentifier(header)).join(', ')})\nVALUES (${activeColumns.map(({ index }) => this.escapeValue(row[index] ?? '')).join(', ')});`).join('\n\n');
+    this.generatedSql = this.dataRows.map(row => `INSERT INTO ${this.escapeIdentifier(table)} (${headers.map(header => this.escapeIdentifier(header)).join(', ')})\nVALUES (${activeColumns.map(({ column, index }) => this.convertValue(row[index] ?? '', column.type)).join(', ')});`).join('\n\n');
     this.statusText = 'Pronto para copiar';
     this.copied = false;
   }
@@ -65,5 +72,32 @@ export class AppComponent {
     if (value || row.length) { row.push(value); if (row.some(cell => cell.trim())) rows.push(row); } return rows;
   }
   private escapeIdentifier(value: string): string { return `"${value.trim().replaceAll('"', '""')}"`; }
-  private escapeValue(value: string): string { const clean = value.trim(); if (!clean) return 'NULL'; if (/^(null|true|false)$/i.test(clean) || /^-?\d+(\.\d+)?$/.test(clean)) return clean.toUpperCase(); return `'${clean.replaceAll("'", "''")}'`; }
+  private convertValue(value: string, type: string): string {
+    const clean = value.trim();
+    if (!clean) return 'NULL';
+    if (type === 'integer' && /^[+-]?\d+$/.test(clean)) {
+      const integer = Number(clean);
+      if (Number.isSafeInteger(integer)) return String(integer);
+    }
+    if (type === 'decimal' && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(clean)) {
+      const decimal = Number(clean);
+      if (Number.isFinite(decimal)) return String(decimal);
+    }
+    if (type === 'boolean') {
+      if (/^(true|1|yes|sim)$/i.test(clean)) return 'TRUE';
+      if (/^(false|0|no|não|nao)$/i.test(clean)) return 'FALSE';
+    }
+    if (type === 'date' && this.isValidIsoDate(clean)) return `'${clean}'`;
+    return `'${clean.replaceAll("'", "''")}'`;
+  }
+
+  private isValidIsoDate(value: string): boolean {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  }
 }
